@@ -27,7 +27,7 @@ class UnitreeArticulationCfg(ArticulationCfg):
     soft_joint_pos_limit_factor = 0.9
 
 
-UNITREE_MODEL_DIR = MISSING
+UNITREE_MODEL_DIR = "/home/lch/unitree_rl_lab/unitree_model"
 
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
