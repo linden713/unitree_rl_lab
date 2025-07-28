@@ -55,12 +55,14 @@ Currently supports Unitree **Go2**, **H1** and **G1-29dof** robots.
   - Running a task:
 
     ```bash
-    python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity
+    python scripts/rsl_rl/train.py --headless --task Unitree-Go2-Velocity
+
+    python scripts/rsl_rl/train.py --headless --task Unitree-Go2-Velocity --resume 
     ```
   - Inference with a trained agent:
 
     ```bash
-    python scripts/rsl_rl/play.py --task Unitree-G1-29dof-Velocity-Play
+    python scripts/rsl_rl/play.py --task Unitree-Go2-Velocity-Play --num_envs 1 --rendering_mode balanced
     ```
 
 ## Deploy
