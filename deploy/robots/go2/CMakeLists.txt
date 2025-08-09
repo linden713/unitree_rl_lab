@@ -12,6 +12,12 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/../../thirdparty/ocs2/include
   ${PROJECT_SOURCE_DIR}/../../thirdparty/onnxruntime-linux-x64-1.22.0/include
   ${PROJECT_SOURCE_DIR}/../../include/
+  ${PROJECT_SOURCE_DIR}/../../unitree_sdk2/include
+)
+
+link_directories(
+  /usr/local/lib
+  ${PROJECT_SOURCE_DIR}/../../unitree_sdk2/lib
 )
 
 link_libraries(
@@ -28,3 +34,5 @@ add_library(${PROJECT_NAME}_lib ${ADD_SRC_LIST})
 link_libraries(${PROJECT_NAME}_lib)
 
 add_executable(go2_ctrl main.cpp)
+add_executable(set_silent_mode set_silent_mode.cpp)
+add_executable(lidar_off lidar_controller.cpp)
