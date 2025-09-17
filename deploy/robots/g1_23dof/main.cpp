@@ -9,7 +9,7 @@ std::shared_ptr<Keyboard> FSMState::keyboard = nullptr;
 
 void init_fsm_state()
 {
-    auto lowcmd_sub = std::make_shared<unitree::robot::go2::subscription::LowCmd>();
+    auto lowcmd_sub = std::make_shared<unitree::robot::g1::subscription::LowCmd>();
     usleep(0.2 * 1e6);
     if(!lowcmd_sub->isTimeout())
     {
@@ -30,33 +30,39 @@ int main(int argc, char** argv)
     auto vm = param::helper(argc, argv);
 
     std::cout << " --- Unitree Robotics --- \n";
-    std::cout << "     H1 Controller \n";
+    std::cout << "     G1-23dof Controller \n";
 
     // Unitree DDS Config
     unitree::robot::ChannelFactory::Instance()->Init(0, vm["network"].as<std::string>());
 
     init_fsm_state();
 
+    FSMState::lowcmd->msg_.mode_machine() = 4; // 23dof
+    if(!FSMState::lowcmd->check_mode_machine(FSMState::lowstate)) {
+        spdlog::critical("Unmatched robot type.");
+        exit(-1);
+    }
+    
     // Initialize FSM
     auto & joy = FSMState::lowstate->joystick;
     auto fsm = std::make_unique<CtrlFSM>(new State_Passive(FSMMode::Passive));
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
-            [&]()->bool{ return joy.LT.pressed && joy.up.on_pressed; }, // L2 + up
+            [&]()->bool{ return joy.LT.pressed && joy.up.on_pressed; }, // L2 + Up
             (int)FSMMode::FixStand
         )
     );
     fsm->add(new State_FixStand(FSMMode::FixStand));
     fsm->states.back()->registered_checks.emplace_back(
         std::make_pair(
-            [&]()->bool{ return joy.RT.pressed && joy.X.on_pressed; }, // R2 + X
+            [&]()->bool{ return joy.RB.pressed && joy.X.on_pressed; }, // R1 + X
             FSMMode::Velocity
         )
     );
     fsm->add(new State_RLBase(FSMMode::Velocity, "Velocity"));
 
     std::cout << "Press [L2 + Up] to enter FixStand mode.\n";
-    std::cout << "And then press [R2 + X] to start controlling the robot.\n";
+    std::cout << "And then press [R1 + X] to start controlling the robot.\n";
 
     while (true)
     {

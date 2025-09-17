@@ -5,6 +5,7 @@
 
 #include "FSMState.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
+#include "isaaclab/envs/mdp/terminations.h"
 
 class State_RLBase : public FSMState
 {

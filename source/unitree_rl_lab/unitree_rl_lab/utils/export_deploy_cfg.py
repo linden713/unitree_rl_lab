@@ -28,23 +28,24 @@ def export_deploy_cfg(env: ManagerBasedRLEnv, log_dir):
     cfg["joint_ids_map"] = joint_ids_map
     cfg["step_dt"] = env.cfg.sim.dt * env.cfg.decimation
     stiffness = np.zeros(len(joint_sdk_names))
-    stiffness[joint_ids_map] = asset.data.joint_stiffness[0].detach().cpu().numpy().tolist()
+    stiffness[joint_ids_map] = asset.data.default_joint_stiffness[0].detach().cpu().numpy().tolist()
     cfg["stiffness"] = stiffness.tolist()
     damping = np.zeros(len(joint_sdk_names))
-    damping[joint_ids_map] = asset.data.joint_damping[0].detach().cpu().numpy().tolist()
+    damping[joint_ids_map] = asset.data.default_joint_damping[0].detach().cpu().numpy().tolist()
     cfg["damping"] = damping.tolist()
     cfg["default_joint_pos"] = asset.data.default_joint_pos[0].detach().cpu().numpy().tolist()
 
     # --- commands ---
     cfg["commands"] = {}
-    cfg["commands"]["base_velocity"] = {}
-    if hasattr(env.cfg.commands.base_velocity, "limit_ranges"):
-        ranges = env.cfg.commands.base_velocity.limit_ranges.to_dict()
-    else:
-        ranges = env.cfg.commands.base_velocity.ranges.to_dict()
-    for item_name in ["lin_vel_x", "lin_vel_y", "ang_vel_z"]:
-        ranges[item_name] = list(ranges[item_name])
-    cfg["commands"]["base_velocity"]["ranges"] = ranges
+    if hasattr(env.cfg.commands, "base_velocity"):  # some environments do not have base_velocity command
+        cfg["commands"]["base_velocity"] = {}
+        if hasattr(env.cfg.commands.base_velocity, "limit_ranges"):
+            ranges = env.cfg.commands.base_velocity.limit_ranges.to_dict()
+        else:
+            ranges = env.cfg.commands.base_velocity.ranges.to_dict()
+        for item_name in ["lin_vel_x", "lin_vel_y", "ang_vel_z"]:
+            ranges[item_name] = list(ranges[item_name])
+        cfg["commands"]["base_velocity"]["ranges"] = ranges
 
     # --- actions ---
     action_names = env.action_manager.active_terms
@@ -73,7 +74,10 @@ def export_deploy_cfg(env: ManagerBasedRLEnv, log_dir):
             del term_cfg[_]
         cfg["actions"][action_name] = term_cfg
 
-        cfg["actions"][action_name]["joint_ids"] = action_term._joint_ids
+        if action_term._joint_ids == slice(None):
+            cfg["actions"][action_name]["joint_ids"] = None
+        else:
+            cfg["actions"][action_name]["joint_ids"] = action_term._joint_ids
 
     # --- observations ---
     obs_names = env.observation_manager.active_terms["policy"]

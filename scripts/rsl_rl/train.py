@@ -69,11 +69,13 @@ if args_cli.distributed and version.parse(installed_version) < version.parse(RSL
 """Rest everything follows."""
 
 import gymnasium as gym
+import inspect
 import os
+import shutil
 import torch
 from datetime import datetime
 
-from rsl_rl.runners import OnPolicyRunner
+from rsl_rl.runners import OnPolicyRunner  # TODO: Consider printing the experiment name in the terminal.
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab.envs import (
@@ -177,6 +179,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     dump_pickle(os.path.join(log_dir, "params", "env.pkl"), env_cfg)
     dump_pickle(os.path.join(log_dir, "params", "agent.pkl"), agent_cfg)
     export_deploy_cfg(env.unwrapped, log_dir)
+    # copy the environment configuration file to the log directory
+    shutil.copy(
+        inspect.getfile(env_cfg.__class__),
+        os.path.join(log_dir, "params", os.path.basename(inspect.getfile(env_cfg.__class__))),
+    )
 
     # run training
     runner.learn(num_learning_iterations=agent_cfg.max_iterations, init_at_random_ep_len=True)

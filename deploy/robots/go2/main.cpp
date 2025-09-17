@@ -3,6 +3,10 @@
 #include "FSM/State_FixStand.h"
 #include "FSM/State_RLBase.h"
 
+std::unique_ptr<LowCmd_t> FSMState::lowcmd = nullptr;
+std::shared_ptr<LowState_t> FSMState::lowstate = nullptr;
+std::shared_ptr<Keyboard> FSMState::keyboard = nullptr;
+
 void init_fsm_state()
 {
     auto lowcmd_sub = std::make_shared<unitree::robot::go2::subscription::LowCmd>();
@@ -13,19 +17,12 @@ void init_fsm_state()
         unitree::robot::go2::shutdown();
         // exit(0);
     }
-    FSMState::lowcmd = std::make_unique<unitree::robot::go2::publisher::LowCmd>();
-    FSMState::lowstate = std::make_shared<unitree::robot::go2::subscription::LowState>();
+    FSMState::lowcmd = std::make_unique<LowCmd_t>();
+    FSMState::lowstate = std::make_shared<LowState_t>();
     spdlog::info("Waiting for connection to robot...");
     FSMState::lowstate->wait_for_connection();
     spdlog::info("Connected to robot.");
 }
-
-enum FSMMode
-{
-    Passive = 1,
-    FixStand = 2,
-    Velocity = 3,
-};
 
 int main(int argc, char** argv)
 {

@@ -12,9 +12,16 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
 
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
-        std::make_shared<unitree::BaseArticulation<go2::subscription::LowState::SharedPtr>>(FSMState::lowstate)
+        std::make_shared<unitree::BaseArticulation<LowState_t::SharedPtr>>(FSMState::lowstate)
     );
     env->alg = std::make_unique<isaaclab::OrtRunner>(policy_dir / "exported" / "policy.onnx");
+
+    this->registered_checks.emplace_back(
+        std::make_pair(
+            [&]()->bool{ return isaaclab::mdp::bad_orientation(env.get(), 1.0); },
+            (int)FSMMode::Passive
+        )
+    );
 }
 
 void State_RLBase::run()

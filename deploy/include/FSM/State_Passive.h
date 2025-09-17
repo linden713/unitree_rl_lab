@@ -19,13 +19,13 @@ public:
                 lowcmd->msg_.motor_cmd()[i].mode() = values[i];
             }
         }
-    }
+    } 
 
     void enter()
     {
         // set gain
         static auto kd = param::config["FSM"]["Passive"]["kd"].as<std::vector<float>>();
-        for(int i(0); i < nq; ++i)
+        for(int i(0); i < kd.size(); ++i)
         {
             auto & motor = lowcmd->msg_.motor_cmd()[i];
             motor.kp() = 0;
@@ -37,7 +37,7 @@ public:
 
     void run()
     {
-        for(int i(0); i < nq; ++i)
+        for(int i(0); i < lowcmd->msg_.motor_cmd().size(); ++i)
         {
             lowcmd->msg_.motor_cmd()[i].q() = lowstate->msg_.motor_state()[i].q();
         }

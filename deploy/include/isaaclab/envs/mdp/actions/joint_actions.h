@@ -17,9 +17,14 @@ public:
     JointAction(YAML::Node cfg, ManagerBasedRLEnv* env)
     :ActionTerm(cfg, env)
     {
-        _num_joints = env->robot->data.joint_ids_map.size();
-        _raw_actions.resize(_num_joints, 0.0f);
-        _processed_actions.resize(_num_joints, 0.0f);
+        if(cfg["joint_ids"].IsNull()) {
+            _action_dim = env->robot->data.joint_ids_map.size();
+        } else {
+            _joint_ids = cfg["joint_ids"].as<std::vector<int>>();
+            _action_dim = _joint_ids.size();
+        }
+        _raw_actions.resize(_action_dim, 0.0f);
+        _processed_actions.resize(_action_dim, 0.0f);
         _scale = cfg["scale"].as<std::vector<float>>();
         _offset = cfg["offset"].as<std::vector<float>>();
 
@@ -31,14 +36,15 @@ public:
 
     void process_actions(std::vector<float> actions)
     {
+        // TODO: modify action by joint_ids
         _raw_actions = actions;
-        for(int i(0); i<_num_joints; ++i)
+        for(int i(0); i<_action_dim; ++i)
         {
             _processed_actions[i] = _raw_actions[i] * _scale[i] + _offset[i];
         }
         if(!_clip.empty())
         {
-            for(int i(0); i<_num_joints; ++i)
+            for(int i(0); i<_action_dim; ++i)
             {
                 _processed_actions[i] = std::clamp(_processed_actions[i], _clip[i][0], _clip[i][1]);
             }
@@ -47,7 +53,7 @@ public:
 
     int action_dim() 
     {
-        return _num_joints;
+        return _action_dim;
     }
 
     std::vector<float> raw_actions() 
@@ -62,11 +68,12 @@ public:
 
     void reset()
     {
-        _raw_actions.assign(_num_joints, 0.0f);
+        _raw_actions.assign(_action_dim, 0.0f);
     }
 
 protected:
-    int _num_joints;
+    int _action_dim;
+    std::vector<int> _joint_ids;
 
     std::vector<float> _raw_actions;
     std::vector<float> _processed_actions;
@@ -86,6 +93,17 @@ public:
     }
 };
 
+class JointVelocityAction : public JointAction
+{
+public:
+    JointVelocityAction(YAML::Node cfg, ManagerBasedRLEnv* env)
+    :JointAction(cfg, env)
+    {
+    }
+};
+
+
 REGISTER_ACTION(JointPositionAction);
+REGISTER_ACTION(JointVelocityAction);
 
 };
