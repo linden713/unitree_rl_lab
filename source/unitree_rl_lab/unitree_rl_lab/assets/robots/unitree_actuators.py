@@ -32,6 +32,11 @@ class UnitreeActuator(IdealPDActuator):
 
     cfg: UnitreeActuatorCfg
 
+    armature: torch.Tensor
+    """The armature of the actuator joints. Shape is (num_envs, num_joints).
+        armature = J2 + J1 * i2 ^ 2 + Jr * (i1 * i2) ^ 2
+    """
+
     def __init__(self, cfg: UnitreeActuatorCfg, *args, **kwargs):
         super().__init__(cfg, *args, **kwargs)
 
@@ -94,7 +99,7 @@ class UnitreeActuatorCfg_M107_15(UnitreeActuatorCfg):
     X1 = 14.0
     X2 = 25.6
     Y1 = 150.0
-    Y2 = 102.8
+    Y2 = 182.8
 
 
 @configclass
@@ -121,6 +126,13 @@ class UnitreeActuatorCfg_N7520_14p3(UnitreeActuatorCfg):
     Y1 = 71
     Y2 = 83.3
 
+    """
+    | rotor  | 0.489e-4 kg·m²
+    | gear_1 | 0.098e-4 kg·m² | ratio | 4.5
+    | gear_2 | 0.533e-4 kg·m² | ratio | 48/22+1
+    """
+    armature = 0.01017752
+
 
 @configclass
 class UnitreeActuatorCfg_N7520_22p5(UnitreeActuatorCfg):
@@ -130,6 +142,13 @@ class UnitreeActuatorCfg_N7520_22p5(UnitreeActuatorCfg):
     Y1 = 111.0
     Y2 = 131.0
 
+    """
+    | rotor  | 0.489e-4 kg·m²
+    | gear_1 | 0.109e-4 kg·m² | ratio | 4.5
+    | gear_2 | 0.738e-4 kg·m² | ratio | 5.0
+    """
+    armature = 0.025101925
+
 
 @configclass
 class UnitreeActuatorCfg_N5010_16(UnitreeActuatorCfg):
@@ -137,6 +156,13 @@ class UnitreeActuatorCfg_N5010_16(UnitreeActuatorCfg):
     X2 = 41.5
     Y1 = 9.5
     Y2 = 17.0
+
+    """
+    | rotor  | 0.084e-4 kg·m²
+    | gear_1 | 0.015e-4 kg·m² | ratio | 4
+    | gear_2 | 0.068e-4 kg·m² | ratio | 4
+    """
+    armature = 0.0021812
 
 
 @configclass
@@ -146,6 +172,13 @@ class UnitreeActuatorCfg_N5020_16(UnitreeActuatorCfg):
     Y1 = 24.8
     Y2 = 31.9
 
+    """
+    | rotor  | 0.139e-4 kg·m²
+    | gear_1 | 0.017e-4 kg·m² | ratio | 46/18+1
+    | gear_2 | 0.169e-4 kg·m² | ratio | 56/16+1
+    """
+    armature = 0.003609725
+
 
 @configclass
 class UnitreeActuatorCfg_W4010_25(UnitreeActuatorCfg):
@@ -153,3 +186,10 @@ class UnitreeActuatorCfg_W4010_25(UnitreeActuatorCfg):
     X2 = 24.76
     Y1 = 4.8
     Y2 = 8.6
+
+    """
+    | rotor  | 0.068e-4 kg·m²
+    | gear_1 |                | ratio | 5
+    | gear_2 |                | ratio | 5
+    """
+    armature = 0.00425

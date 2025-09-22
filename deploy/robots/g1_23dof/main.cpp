@@ -38,6 +38,10 @@ int main(int argc, char** argv)
     init_fsm_state();
 
     FSMState::lowcmd->msg_.mode_machine() = 4; // 23dof
+    if(!FSMState::lowcmd->check_mode_machine(FSMState::lowstate)) {
+        spdlog::critical("Unmatched robot type.");
+        exit(-1);
+    }
     
     // Initialize FSM
     auto & joy = FSMState::lowstate->joystick;
