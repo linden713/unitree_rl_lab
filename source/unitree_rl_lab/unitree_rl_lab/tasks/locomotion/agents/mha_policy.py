@@ -6,6 +6,9 @@
 from dataclasses import field
 from typing import Tuple
 
+import contextlib
+import io
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -188,17 +191,15 @@ class MHAPolicy(ActorCritic):
         # Here we choose the latter as it is more conventional for inheritance.
         # We need to call the parent constructor. Since we are building a custom network,
         # we can pass dummy values for dimensions, as we will overwrite the actor and critic networks.
-        super().__init__(
-            # Dummy obs that matches the structure expected by obs_groups.
-            # The parent class expects keys that are present in the obs_groups values.
-            # Since obs_groups is {'policy': ['policy'], 'critic': ['critic']},
-            # we need to provide 'policy' and 'critic' keys.
-            obs={"policy": torch.zeros(1, 1), "critic": torch.zeros(1, 1)},
-            obs_groups=obs_groups,
-            num_actions=action_space_dim,
-            activation=activation,
-            **kwargs
-        )
+        silent_buffer = io.StringIO()
+        with contextlib.redirect_stdout(silent_buffer):
+            super().__init__(
+                obs={"policy": torch.zeros(1, 1), "critic": torch.zeros(1, 1)},
+                obs_groups=obs_groups,
+                num_actions=action_space_dim,
+                activation=activation,
+                **kwargs
+            )
 
         # Restore the correct obs_groups
         self.obs_groups = obs_groups
@@ -333,7 +334,7 @@ class MHAPolicyCfg(RslRlPpoActorCriticCfg):
     critic_hidden_dims: list[int] = field(default_factory=lambda: [512, 256, 128])
     activation: str = "elu"
     d: int = 64  # MHA dimension
-    h: int = 4  # Number of attention heads
+    h: int = 16  # Number of attention heads
     scan_size: Tuple[float, float] = (1.6, 1.0)  # Ray scan coverage (length, width)
     scan_resolution: float = 0.1
 

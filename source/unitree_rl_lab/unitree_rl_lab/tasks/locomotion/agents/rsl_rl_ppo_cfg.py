@@ -22,7 +22,7 @@ class BasePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         critic_obs_normalization=False,
         activation="elu",
         d=64,
-        h=1,
+        h=16,
         scan_size=(1.6, 1.0),
         scan_resolution=0.1,
     )
