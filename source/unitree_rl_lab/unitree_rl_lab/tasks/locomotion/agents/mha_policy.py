@@ -118,7 +118,7 @@ class MHAEncoder(nn.Module):
         # Concatenate CNN features and 3D coordinates
         local_features = torch.cat([feats, xyz_flat], dim=-1)  # (B, L*W, d)
 
-        proprio_emb = self.proprio_proj(proprioception).unsqueeze(1)  
+        proprio_emb = self.proprio_proj(proprioception).unsqueeze(1)
 
         # Multi-head attention: proprioception as query, local_features as key and value
         attn_output, _ = self.mha(
@@ -181,8 +181,14 @@ class MHAPolicy(ActorCritic):
         scan_size=(1.6, 1.0),
         scan_resolution=0.1,
         activation="elu",
+        compile_networks=False,
         **kwargs,
     ):
+        print("Initialization parameters:")
+        for k, v in locals().items():
+            if k != "self":
+                print(f"  {k}: {v}")
+        print("="*20)
         # 1. Call the parent constructor.
         # We need to call the parent's __init__. However, the parent class creates standard MLP networks,
         # which conflicts with our custom network.
@@ -207,12 +213,30 @@ class MHAPolicy(ActorCritic):
         self.h = h
         self.scan_size = scan_size
 
+        # (Removed profiling toggles and instrumentation.)
+
         # Dynamically get dimensions from the observation space
         policy_obs_space = obs_space[obs_groups["policy"][0]]
         critic_obs_space = obs_space[obs_groups["critic"][0]]
         self.proprio_dim = self._get_proprio_dim(policy_obs_space)
         self.critic_extra_dim = self._get_critic_extra_dim(critic_obs_space)
 
+        # Pre-define keys for concatenation to avoid list creation in forward pass
+        self.proprio_keys = [
+            "base_ang_vel",
+            "projected_gravity",
+            "velocity_commands",
+            "joint_pos_rel",
+            "joint_vel_rel",
+            "last_action",
+        ]
+        self.critic_extra_keys = [
+            "base_lin_vel",
+            "joint_effort",
+        ]
+        # Ensure all keys exist in the observation space for safety
+        assert all(key in policy_obs_space.keys() for key in self.proprio_keys)
+        assert all(key in critic_obs_space.keys() for key in self.critic_extra_keys)
 
         self.MHA_encoder = MHAEncoder(
             d=d,
@@ -225,6 +249,13 @@ class MHAPolicy(ActorCritic):
         self.actor  = ActorHead(self.MHA_encoder,  self.proprio_dim, action_space_dim)
         self.critic = CriticHead(self.MHA_encoder, self.proprio_dim, self.critic_extra_dim)
 
+        # Compile the actor and critic networks for better performance.
+        # This is available from PyTorch 2.0 onwards.
+        # As the MHA_encoder is a shared part of both actor and critic,
+        # compiling them will also compile the shared encoder.
+        if compile_networks:
+            self.actor = torch.compile(self.actor)
+            self.critic = torch.compile(self.critic)
         
     def act(self, obs, **kwargs):
         # This method is called during data collection.
@@ -244,6 +275,46 @@ class MHAPolicy(ActorCritic):
         map_scans, proprioception, critic_extra = self._prepare_critic_inputs(obs)
         value = self.critic(map_scans, proprioception, critic_extra)
         return value
+
+    def load_state_dict(self, state_dict, strict=True):
+        """Load the parameters of the actor-critic model.
+
+        This method is overridden to handle a key mismatch that can occur when
+        loading a checkpoint saved from a non-compiled model into a compiled model, or vice-versa.
+        The `torch.compile` function adds a `_orig_mod.` prefix to the keys. This method
+        adds or removes that prefix to match the current model's state_dict.
+
+        Args:
+            state_dict (dict): State dictionary of the model.
+            strict (bool): Whether to strictly enforce that the keys in state_dict match the keys returned by this
+                           module's state_dict() function.
+        """
+        model_has_prefix = any("_orig_mod" in k for k in self.state_dict())
+        ckpt_has_prefix = any("_orig_mod" in k for k in state_dict)
+
+        if model_has_prefix and not ckpt_has_prefix:
+            # Case 1: Add prefix to checkpoint keys
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                if k.startswith("actor.") or k.startswith("critic."):
+                    parts = k.split(".", 1)
+                    new_key = f"{parts[0]}._orig_mod.{parts[1]}"
+                    new_state_dict[new_key] = v
+                else:
+                    new_state_dict[k] = v
+            state_dict = new_state_dict
+        elif not model_has_prefix and ckpt_has_prefix:
+            # Case 2: Remove prefix from checkpoint keys
+            new_state_dict = {}
+            for k, v in state_dict.items():
+                if "_orig_mod" in k:
+                    new_key = k.replace("._orig_mod", "")
+                    new_state_dict[new_key] = v
+                else:
+                    new_state_dict[k] = v
+            state_dict = new_state_dict
+
+        return super().load_state_dict(state_dict, strict=strict)
 
     
     def get_actor_obs(self, obs):
@@ -278,44 +349,23 @@ class MHAPolicy(ActorCritic):
         """Calculate the extra observation dimension for the Critic."""
         return critic_obs_space["base_lin_vel"].shape[-1] + critic_obs_space["joint_effort"].shape[-1]
 
+    def _prepare_inputs(self, obs_dict, proprio_keys, extra_keys=None):
+        map_scans = obs_dict["height_scan"]
+        proprioception = torch.cat([obs_dict[key] for key in proprio_keys], dim=-1)
+        
+        if extra_keys:
+            extra_data = torch.cat([obs_dict[key] for key in extra_keys], dim=-1)
+            return map_scans, proprioception, extra_data
+        
+        return map_scans, proprioception
+
     def _prepare_actor_inputs(self, obs):
         actor_obs_dict = self.get_actor_obs(obs)
-        map_scans = actor_obs_dict["height_scan"]
-        proprioception = torch.cat(
-            [
-                actor_obs_dict["base_ang_vel"],
-                actor_obs_dict["projected_gravity"],
-                actor_obs_dict["velocity_commands"],
-                actor_obs_dict["joint_pos_rel"],
-                actor_obs_dict["joint_vel_rel"],
-                actor_obs_dict["last_action"],
-            ],
-            dim=-1,
-        )
-        return map_scans, proprioception
+        return self._prepare_inputs(actor_obs_dict, self.proprio_keys)
 
     def _prepare_critic_inputs(self, obs):
         critic_obs_dict = self.get_critic_obs(obs)
-        map_scans = critic_obs_dict["height_scan"]
-        proprioception = torch.cat(
-            [
-                critic_obs_dict["base_ang_vel"],
-                critic_obs_dict["projected_gravity"],
-                critic_obs_dict["velocity_commands"],
-                critic_obs_dict["joint_pos_rel"],
-                critic_obs_dict["joint_vel_rel"],
-                critic_obs_dict["last_action"],
-            ],
-            dim=-1,
-        )
-        critic_extra = torch.cat(
-            [
-                critic_obs_dict["base_lin_vel"],
-                critic_obs_dict["joint_effort"],
-            ],
-            dim=-1,
-        )
-        return map_scans, proprioception, critic_extra
+        return self._prepare_inputs(critic_obs_dict, self.proprio_keys, self.critic_extra_keys)
 
 
 import rsl_rl.runners.on_policy_runner as _rsl_on_policy_runner
@@ -337,6 +387,8 @@ class MHAPolicyCfg(RslRlPpoActorCriticCfg):
     h: int = 16  # Number of attention heads
     scan_size: Tuple[float, float] = (1.6, 1.0)  # Ray scan coverage (length, width)
     scan_resolution: float = 0.1
+    compile_networks=True,
+
 
 
 def _patch_rollout_storage():

@@ -12,7 +12,7 @@ from .mha_policy import MHAPolicyCfg
 class BasePPORunnerCfg(RslRlOnPolicyRunnerCfg):
     num_steps_per_env = 24
     max_iterations = 50000
-    save_interval = 1000
+    save_interval = 500
     experiment_name = ""  # same as task name
     empirical_normalization = False
     obs_groups = {"policy": ["policy"], "critic": ["critic"]}
@@ -23,8 +23,10 @@ class BasePPORunnerCfg(RslRlOnPolicyRunnerCfg):
         activation="elu",
         d=64,
         h=16,
-        scan_size=(1.6, 1.0),
+        scan_size=(0.8,0.6),
         scan_resolution=0.1,
+        compile_networks=False,
+
     )
     algorithm = RslRlPpoAlgorithmCfg(
         value_loss_coef=1.0,

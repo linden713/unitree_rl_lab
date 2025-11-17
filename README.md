@@ -66,7 +66,7 @@ Currently supports Unitree **Go2**, **H1** and **G1-29dof** robots.
 
     ```bash
 
-    python scripts/rsl_rl/play.py --task Unitree-G1-29dof-Velocity
+    python scripts/rsl_rl/play.py --task Unitree-Go2-Velocity
 
     ```
 

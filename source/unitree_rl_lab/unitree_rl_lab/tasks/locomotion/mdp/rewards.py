@@ -202,6 +202,68 @@ def feet_gait(
 
 
 """
+Step/Height-Spread rewards (direction-agnostic).
+"""
+
+
+def feet_contact_height_spread(
+    env: ManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg,
+    sensor_cfg: SceneEntityCfg,
+    min_diff: float = 0.1,
+    tanh_mult: float = 5.0,
+    command_name: str = "base_velocity",
+    cmd_threshold: float = 0.1,
+) -> torch.Tensor:
+    """Positive reward when contacting feet exhibit sufficient world-Z height spread.
+
+    Design goals:
+    - Direction-agnostic: independent of which side steps up (forward/backward/diagonal).
+    - Stable on flat: near-zero on flat ground (small spread).
+    - Avoid over-inflation: saturate via tanh; gate by command and base orientation.
+
+    Args:
+        asset_cfg: Entity for robot with feet bodies selected via body_names pattern.
+        sensor_cfg: Contact sensor bound to the same bodies.
+        min_diff: Minimum Z spread (m) before reward activates.
+        tanh_mult: Saturation gain for reward magnitude.
+        command_name: RL command key used for gating.
+        cmd_threshold: Norm threshold for enabling reward.
+    """
+    # entities
+    asset: RigidObject = env.scene[asset_cfg.name]
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+
+    # world Z of feet bodies
+    z_w = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]
+    # contact mask for selected feet
+    is_contact = contact_sensor.data.current_contact_time[:, sensor_cfg.body_ids] > 0
+
+    # compute spread among contacting feet when >=2 contacts, else fall back to all feet
+    contact_count = torch.sum(is_contact, dim=1)
+    # masked min/max using large sentinels
+    z_contact_max = torch.max(torch.where(is_contact, z_w, torch.full_like(z_w, -1e6)), dim=1).values
+    z_contact_min = torch.min(torch.where(is_contact, z_w, torch.full_like(z_w, 1e6)), dim=1).values
+    spread_contact = z_contact_max - z_contact_min
+    spread_all = torch.max(z_w, dim=1).values - torch.min(z_w, dim=1).values
+    use_contact = contact_count >= 2
+    spread = torch.where(use_contact, spread_contact, spread_all)
+
+    # activation above margin and smooth saturation
+    activated = torch.clamp(spread - min_diff, min=0.0)
+    reward = torch.tanh(tanh_mult * activated) if tanh_mult > 0 else activated
+
+    # gate by command magnitude
+    cmd_norm = torch.linalg.norm(env.command_manager.get_command(command_name), dim=1)
+    reward *= (cmd_norm > cmd_threshold)
+
+    # softly gate by uprightness (1.0 when upright, 0.0 when upside-down)
+    reward *= torch.clamp(-asset.data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+
+    return reward
+
+
+"""
 Other rewards.
 """
 
