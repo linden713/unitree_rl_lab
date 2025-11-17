@@ -83,6 +83,38 @@ inline void load_config_file()
     }
 }
 
+inline std::filesystem::path parser_policy_dir(std::filesystem::path policy_dir)
+{
+    // Load Policy
+    if (policy_dir.is_relative()) {
+        policy_dir = param::proj_dir / policy_dir;
+    }
+
+    // If there is no `exported` folder in this folder,
+    // then sort all the folders under this folder and take the last folder
+    if (!std::filesystem::exists(policy_dir / "exported")) {
+        auto dirs = std::filesystem::directory_iterator(policy_dir);
+        std::vector<std::filesystem::path> dir_list;
+        for (const auto& entry : dirs) {
+            if (entry.is_directory()) {
+                dir_list.push_back(entry.path());
+            }
+        }
+        if (!dir_list.empty()) {
+            std::sort(dir_list.begin(), dir_list.end());
+            // Check if there is an `exported` folder starting from the last folder
+            for (auto it = dir_list.rbegin(); it != dir_list.rend(); ++it) {
+                if (std::filesystem::exists(*it / "exported")) {
+                    policy_dir = *it;
+                    break;
+                }
+            }
+        }
+    }
+    spdlog::info("Policy directory: {}", policy_dir.string());
+    return policy_dir;
+}
+
 /* ---------- Command Line Parameters ---------- */
 namespace po = boost::program_options;
 

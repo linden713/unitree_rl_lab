@@ -25,31 +25,40 @@ public:
         }
         _raw_actions.resize(_action_dim, 0.0f);
         _processed_actions.resize(_action_dim, 0.0f);
-        _scale = cfg["scale"].as<std::vector<float>>();
-        _offset = cfg["offset"].as<std::vector<float>>();
-
-        if(!cfg["clip"].IsNull())
-        {
+        if(!cfg["scale"].IsNull()) {
+            _scale = cfg["scale"].as<std::vector<float>>();
+        }
+        if(!cfg["offset"].IsNull()) {
+            _offset = cfg["offset"].as<std::vector<float>>();
+        }
+        if(!cfg["clip"].IsNull()) {
             _clip = cfg["clip"].as<std::vector<std::vector<float> >>();
         }
     }
 
-    void process_actions(std::vector<float> actions)
+    virtual void process_actions(std::vector<float> actions)
     {
         // TODO: modify action by joint_ids
         _raw_actions = actions;
         for(int i(0); i<_action_dim; ++i)
         {
-            _processed_actions[i] = _raw_actions[i] * _scale[i] + _offset[i];
+            if(!_scale.empty()) {
+                _processed_actions[i] = _raw_actions[i] * _scale[i];
+            } else {
+                _processed_actions[i] = _raw_actions[i];
+            }
+            if(!_offset.empty()) {
+                _processed_actions[i] += _offset[i];
+            }
         }
         if(!_clip.empty())
         {
-            for(int i(0); i<_action_dim; ++i)
-            {
+            for(int i(0); i<_action_dim; ++i) {
                 _processed_actions[i] = std::clamp(_processed_actions[i], _clip[i][0], _clip[i][1]);
             }
         }
     }
+
 
     int action_dim() 
     {
@@ -101,7 +110,6 @@ public:
     {
     }
 };
-
 
 REGISTER_ACTION(JointPositionAction);
 REGISTER_ACTION(JointVelocityAction);

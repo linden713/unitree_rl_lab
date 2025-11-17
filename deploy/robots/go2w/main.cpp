@@ -38,22 +38,8 @@ int main(int argc, char** argv)
     init_fsm_state();
 
     // Initialize FSM
-    auto & joy = FSMState::lowstate->joystick;
-    auto fsm = std::make_unique<CtrlFSM>(new State_Passive(FSMMode::Passive));
-    fsm->states.back()->registered_checks.emplace_back(
-        std::make_pair(
-            [&]()->bool{ return joy.LT.pressed && joy.A.on_pressed; }, // L2 + A
-            (int)FSMMode::FixStand
-        )
-    );
-    fsm->add(new State_FixStand(FSMMode::FixStand));
-    fsm->states.back()->registered_checks.emplace_back(
-        std::make_pair(
-            [&]()->bool{ return joy.start.on_pressed; }, // Start
-            FSMMode::Velocity
-        )
-    );
-    fsm->add(new State_RLBase(FSMMode::Velocity, "Velocity"));
+    auto fsm = std::make_unique<CtrlFSM>(param::config["FSM"]);
+    fsm->start();
 
     std::cout << "Press [L2 + A] to enter FixStand mode.\n";
     std::cout << "And then press [Start] to start controlling the robot.\n";

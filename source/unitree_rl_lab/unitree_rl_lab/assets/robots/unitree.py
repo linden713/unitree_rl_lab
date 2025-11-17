@@ -8,7 +8,7 @@
 Reference: https://github.com/unitreerobotics/unitree_ros
 """
 
-from dataclasses import MISSING
+import os
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import IdealPDActuatorCfg, ImplicitActuatorCfg
@@ -16,6 +16,9 @@ from isaaclab.assets.articulation import ArticulationCfg
 from isaaclab.utils import configclass
 
 from unitree_rl_lab.assets.robots import unitree_actuators
+
+UNITREE_MODEL_DIR = "path/to/unitree_model"  # Replace with the actual path to your unitree_model directory
+UNITREE_ROS_DIR = "path/to/unitree_ros"  # Replace with the actual path to your unitree_ros package
 
 
 @configclass
@@ -27,24 +30,74 @@ class UnitreeArticulationCfg(ArticulationCfg):
     soft_joint_pos_limit_factor = 0.9
 
 
-UNITREE_MODEL_DIR = MISSING
+@configclass
+class UnitreeUsdFileCfg(sim_utils.UsdFileCfg):
+    activate_contact_sensors: bool = True
+    rigid_props = sim_utils.RigidBodyPropertiesCfg(
+        disable_gravity=False,
+        retain_accelerations=False,
+        linear_damping=0.0,
+        angular_damping=0.0,
+        max_linear_velocity=1000.0,
+        max_angular_velocity=1000.0,
+        max_depenetration_velocity=1.0,
+    )
+    articulation_props = sim_utils.ArticulationRootPropertiesCfg(
+        enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+    )
+
+
+@configclass
+class UnitreeUrdfFileCfg(sim_utils.UrdfFileCfg):
+    fix_base: bool = False
+    activate_contact_sensors: bool = True
+    replace_cylinders_with_capsules = True
+    joint_drive = sim_utils.UrdfConverterCfg.JointDriveCfg(
+        gains=sim_utils.UrdfConverterCfg.JointDriveCfg.PDGainsCfg(stiffness=0, damping=0)
+    )
+    articulation_props = sim_utils.ArticulationRootPropertiesCfg(
+        enabled_self_collisions=True,
+        solver_position_iteration_count=8,
+        solver_velocity_iteration_count=4,
+    )
+    rigid_props = sim_utils.RigidBodyPropertiesCfg(
+        disable_gravity=False,
+        retain_accelerations=False,
+        linear_damping=0.0,
+        angular_damping=0.0,
+        max_linear_velocity=1000.0,
+        max_angular_velocity=1000.0,
+        max_depenetration_velocity=1.0,
+    )
+
+    def replace_asset(self, meshes_dir, urdf_path):
+        """Replace the asset with a temporary copy to avoid modifying the original asset.
+
+        When need to change the collisions, place the modified URDF file separately in this repository,
+        and let `meshes_dir` be provided by `unitree_ros`.
+        This function will auto construct a complete `robot_description` file structure in the `/tmp` directory.
+        Note: The mesh references inside the URDF should be in the same directory level as the URDF itself.
+        """
+        tmp_meshes_dir = "/tmp/IsaacLab/unitree_rl_lab/meshes"
+        if os.path.exists(tmp_meshes_dir):
+            os.remove(tmp_meshes_dir)
+        os.makedirs("/tmp/IsaacLab/unitree_rl_lab", exist_ok=True)
+        os.symlink(meshes_dir, tmp_meshes_dir)
+
+        self.asset_path = "/tmp/IsaacLab/unitree_rl_lab/robot.urdf"
+        if os.path.exists(self.asset_path):
+            os.remove(self.asset_path)
+        os.symlink(urdf_path, self.asset_path)
+
+
+""" Configuration for the Unitree robots."""
 
 UNITREE_GO2_CFG = UnitreeArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_ROS_DIR}/robots/go2_description/urdf/go2_description.urdf",
+    # ),
+    spawn=UnitreeUsdFileCfg(
         usd_path=f"{UNITREE_MODEL_DIR}/Go2/usd/go2.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=100.0,
-            max_angular_velocity=100.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
-        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.4),
@@ -76,21 +129,11 @@ UNITREE_GO2_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_GO2W_CFG = UnitreeArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_ROS_DIR}/robots/go2w_description/urdf/go2w_description.urdf",
+    # ),
+    spawn=UnitreeUsdFileCfg(
         usd_path=f"{UNITREE_MODEL_DIR}/Go2W/usd/go2w.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=100.0,
-            max_angular_velocity=100.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
-        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.45),
@@ -129,21 +172,11 @@ UNITREE_GO2W_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_B2_CFG = UnitreeArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_ROS_DIR}/robots/b2_description/urdf/b2_description.urdf",
+    # ),
+    spawn=UnitreeUsdFileCfg(
         usd_path=f"{UNITREE_MODEL_DIR}/B2/usd/b2.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=100.0,
-            max_angular_velocity=100.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
-        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.58),
@@ -178,21 +211,11 @@ UNITREE_B2_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_H1_CFG = UnitreeArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_ROS_DIR}/robots/h1_description/urdf/h1.urdf",
+    # ),
+    spawn=UnitreeUsdFileCfg(
         usd_path=f"{UNITREE_MODEL_DIR}/H1/h1/usd/h1.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=False, solver_position_iteration_count=4, solver_velocity_iteration_count=4
-        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 1.1),
@@ -273,23 +296,11 @@ UNITREE_H1_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_ROS_DIR}/robots/g1_description/g1_23dof_rev_1_0.urdf",
+    # ),
+    spawn=UnitreeUsdFileCfg(
         usd_path=f"{UNITREE_MODEL_DIR}/G1/23dof/usd/g1_23dof_rev_1_0/g1_23dof_rev_1_0.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True,
-            solver_position_iteration_count=8,
-            solver_velocity_iteration_count=4,
-        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.8),
@@ -384,21 +395,11 @@ UNITREE_G1_23DOF_CFG = UnitreeArticulationCfg(
 )
 
 UNITREE_G1_29DOF_CFG = UnitreeArticulationCfg(
-    spawn=sim_utils.UsdFileCfg(
+    # spawn=UnitreeUrdfFileCfg(
+    #     asset_path=f"{UNITREE_ROS_DIR}/robots/g1_description/g1_29dof_rev_1_0.urdf",
+    # ),
+    spawn=UnitreeUsdFileCfg(
         usd_path=f"{UNITREE_MODEL_DIR}/G1/29dof/usd/g1_29dof_rev_1_0/g1_29dof_rev_1_0.usd",
-        activate_contact_sensors=True,
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=1.0,
-        ),
-        articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
-        ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.8),

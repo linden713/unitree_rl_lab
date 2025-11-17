@@ -3,17 +3,17 @@ from __future__ import annotations
 import torch
 from dataclasses import MISSING
 
-from isaaclab.actuators import IdealPDActuator, IdealPDActuatorCfg
+from isaaclab.actuators import DelayedPDActuator, DelayedPDActuatorCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.types import ArticulationActions
 
 
-class UnitreeActuator(IdealPDActuator):
+class UnitreeActuator(DelayedPDActuator):
     """Unitree actuator class that implements a torque-speed curve for the actuators.
 
     The torque-speed curve is defined as follows:
 
-            Torque, N·m
+            Torque Limit, N·m
                 ^
     Y2──────────|
                 |──────────────Y1
@@ -24,10 +24,14 @@ class UnitreeActuator(IdealPDActuator):
     ------------+--------------|------> velocity: rad/s
                               X1   X2
 
-    Y1: Peak Torque Test (Torque and Speed in the Same Direction)
-    Y2: Peak Torque Test (Torque and Speed in the Opposite Direction)
-    X1: Maximum Speed at Full Torque (T-N Curve Knee Point)
-    X2: No-Load Speed Test
+    - Y1: Peak Torque Test (Torque and Speed in the Same Direction)
+    - Y2: Peak Torque Test (Torque and Speed in the Opposite Direction)
+    - X1: Maximum Speed at Full Torque (T-N Curve Knee Point)
+    - X2: No-Load Speed Test
+
+    - Fs: Static friction coefficient
+    - Fd: Dynamic friction coefficient
+    - Va: Velocity at which the friction is fully activated
     """
 
     cfg: UnitreeActuatorCfg
@@ -40,14 +44,14 @@ class UnitreeActuator(IdealPDActuator):
     def __init__(self, cfg: UnitreeActuatorCfg, *args, **kwargs):
         super().__init__(cfg, *args, **kwargs)
 
-        assert cfg.X1 < cfg.X2, "X1 must be less than X2"
-        assert cfg.Y1 <= cfg.Y2, "Y1 must be less than or equal to Y2"
-
         self._joint_vel = torch.zeros_like(self.computed_effort)
-        self._effort_y1 = torch.tensor(cfg.Y1, dtype=self.computed_effort.dtype, device=self.computed_effort.device)
-        self._effort_y2 = torch.tensor(cfg.Y2, dtype=self.computed_effort.dtype, device=self.computed_effort.device)
-        self._velocity_x1 = torch.tensor(cfg.X1, dtype=self.computed_effort.dtype, device=self.computed_effort.device)
-        self._velocity_x2 = torch.tensor(cfg.X2, dtype=self.computed_effort.dtype, device=self.computed_effort.device)
+        self._effort_y1 = self._parse_joint_parameter(cfg.Y1, 1e9)
+        self._effort_y2 = self._parse_joint_parameter(cfg.Y2, cfg.Y1)
+        self._velocity_x1 = self._parse_joint_parameter(cfg.X1, 1e9)
+        self._velocity_x2 = self._parse_joint_parameter(cfg.X2, 1e9)
+        self._friction_static = self._parse_joint_parameter(cfg.Fs, 0.0)
+        self._friction_dynamic = self._parse_joint_parameter(cfg.Fd, 0.0)
+        self._activation_vel = self._parse_joint_parameter(cfg.Va, 0.01)
 
     def compute(
         self, control_action: ArticulationActions, joint_pos: torch.Tensor, joint_vel: torch.Tensor
@@ -55,7 +59,18 @@ class UnitreeActuator(IdealPDActuator):
         # save current joint vel
         self._joint_vel[:] = joint_vel
         # calculate the desired joint torques
-        return super().compute(control_action, joint_pos, joint_vel)
+        control_action = super().compute(control_action, joint_pos, joint_vel)
+
+        # apply friction model on the torque
+        self.applied_effort -= (
+            self._friction_static * torch.tanh(joint_vel / self._activation_vel) + self._friction_dynamic * joint_vel
+        )
+
+        control_action.joint_positions = None
+        control_action.joint_velocities = None
+        control_action.joint_efforts = self.applied_effort
+
+        return control_action
 
     def _clip_effort(self, effort: torch.Tensor) -> torch.Tensor:
         # check if the effort is the same direction as the joint velocity
@@ -74,24 +89,33 @@ class UnitreeActuator(IdealPDActuator):
 
 
 @configclass
-class UnitreeActuatorCfg(IdealPDActuatorCfg):
+class UnitreeActuatorCfg(DelayedPDActuatorCfg):
     """
     Configuration for Unitree actuators.
     """
 
     class_type: type = UnitreeActuator
 
-    X1: float = MISSING
+    X1: float = 1e9
     """Maximum Speed at Full Torque(T-N Curve Knee Point) Unit: rad/s"""
 
-    X2: float = MISSING
+    X2: float = 1e9
     """No-Load Speed Test Unit: rad/s"""
 
     Y1: float = MISSING
     """Peak Torque Test(Torque and Speed in the Same Direction) Unit: N*m"""
 
-    Y2: float = MISSING
+    Y2: float | None = None
     """Peak Torque Test(Torque and Speed in the Opposite Direction) Unit: N*m"""
+
+    Fs: float = 0.0
+    """ Static friction coefficient """
+
+    Fd: float = 0.0
+    """ Dynamic friction coefficient """
+
+    Va: float = 0.01
+    """ Velocity at which the friction is fully activated """
 
 
 @configclass
@@ -101,6 +125,8 @@ class UnitreeActuatorCfg_M107_15(UnitreeActuatorCfg):
     Y1 = 150.0
     Y2 = 182.8
 
+    armature = 0.063259741
+
 
 @configclass
 class UnitreeActuatorCfg_M107_24(UnitreeActuatorCfg):
@@ -108,6 +134,8 @@ class UnitreeActuatorCfg_M107_24(UnitreeActuatorCfg):
     X2 = 16
     Y1 = 240
     Y2 = 292.5
+
+    armature = 0.160478022
 
 
 @configclass
@@ -126,6 +154,9 @@ class UnitreeActuatorCfg_N7520_14p3(UnitreeActuatorCfg):
     Y1 = 71
     Y2 = 83.3
 
+    Fs = 1.6
+    Fd = 0.16
+
     """
     | rotor  | 0.489e-4 kg·m²
     | gear_1 | 0.098e-4 kg·m² | ratio | 4.5
@@ -141,6 +172,9 @@ class UnitreeActuatorCfg_N7520_22p5(UnitreeActuatorCfg):
     X2 = 22.7
     Y1 = 111.0
     Y2 = 131.0
+
+    Fs = 2.4
+    Fd = 0.24
 
     """
     | rotor  | 0.489e-4 kg·m²
@@ -172,6 +206,9 @@ class UnitreeActuatorCfg_N5020_16(UnitreeActuatorCfg):
     Y1 = 24.8
     Y2 = 31.9
 
+    Fs = 0.6
+    Fd = 0.06
+
     """
     | rotor  | 0.139e-4 kg·m²
     | gear_1 | 0.017e-4 kg·m² | ratio | 46/18+1
@@ -186,6 +223,9 @@ class UnitreeActuatorCfg_W4010_25(UnitreeActuatorCfg):
     X2 = 24.76
     Y1 = 4.8
     Y2 = 8.6
+
+    Fs = 0.6
+    Fd = 0.06
 
     """
     | rotor  | 0.068e-4 kg·m²

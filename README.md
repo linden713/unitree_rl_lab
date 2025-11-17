@@ -34,13 +34,14 @@ Currently supports Unitree **Go2**, **H1** and **G1-29dof** robots.
 
     ```bash
     conda activate env_isaaclab
-    python -m pip install -e source/unitree_rl_lab
+    ./unitree_rl_lab.sh -i
+    # restart your shell to activate the environment changes.
     ```
-- Download unitree usd files
+- Download unitree robot description files
 
+  *Method 1: Using USD Files*
   - Download unitree usd files from [unitree_model](https://huggingface.co/datasets/unitreerobotics/unitree_model/tree/main), keeping folder structure
     ```bash
-    git lfs install
     git clone https://huggingface.co/datasets/unitreerobotics/unitree_model
     ```
   - Config `UNITREE_MODEL_DIR` in `source/unitree_rl_lab/unitree_rl_lab/assets/robots/unitree.py`.
@@ -48,21 +49,39 @@ Currently supports Unitree **Go2**, **H1** and **G1-29dof** robots.
     ```bash
     UNITREE_MODEL_DIR = "</home/user/projects/unitree_usd>"
     ```
+
+  *Method 2: Using URDF Files [Recommended]* Only for Isaacsim >= 5.0
+  -  Download unitree robot urdf files from [unitree_ros](https://github.com/unitreerobotics/unitree_ros)
+      ```
+      git clone https://github.com/unitreerobotics/unitree_ros.git
+      ```
+  - Config `UNITREE_ROS_DIR` in `source/unitree_rl_lab/unitree_rl_lab/assets/robots/unitree.py`.
+    ```bash
+    UNITREE_ROS_DIR = "</home/user/projects/unitree_ros/unitree_ros>"
+    ```
+  - [Optional]: change *robot_cfg.spawn* if you want to use urdf files
+
+
+
 - Verify that the environments are correctly installed by:
 
   - Listing the available tasks:
 
     ```bash
-    python scripts/list_envs.py
+    ./unitree_rl_lab.sh -l # This is a faster version than isaaclab
     ```
   - Running a task:
 
     ```bash
+    ./unitree_rl_lab.sh -t --task Unitree-G1-29dof-Velocity # support for autocomplete task-name
+    # same as
     python scripts/rsl_rl/train.py --headless --task Unitree-G1-29dof-Velocity
     ```
   - Inference with a trained agent:
 
     ```bash
+    ./unitree_rl_lab.sh -p --task Unitree-G1-29dof-Velocity # support for autocomplete task-name
+    # same as
     python scripts/rsl_rl/play.py --task Unitree-G1-29dof-Velocity
     ```
 
@@ -128,3 +147,4 @@ This repository is built upon the support and contributions of the following ope
 - [IsaacLab](https://github.com/isaac-sim/IsaacLab): The foundation for training and running codes.
 - [mujoco](https://github.com/google-deepmind/mujoco.git): Providing powerful simulation functionalities.
 - [robot_lab](https://github.com/fan-ziqi/robot_lab): Referenced for project structure and parts of the implementation.
+- [whole_body_tracking](https://github.com/HybridRobotics/whole_body_tracking): Versatile humanoid control framework for motion tracking.

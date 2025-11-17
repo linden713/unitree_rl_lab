@@ -1,12 +1,12 @@
 #include "FSM/State_RLBase.h"
 #include "unitree_articulation.h"
-#include "isaaclab/envs/mdp/observations.h"
+#include "isaaclab/envs/mdp/observations/observations.h"
 #include "isaaclab/envs/mdp/actions/joint_actions.h"
 #include <unordered_map>
 
 namespace isaaclab
 {
-// keyboard velocity commands
+// keyboard velocity commands example
 // change "velocity_commands" observation name in policy deploy.yaml to "keyboard_velocity_commands"
 REGISTER_OBSERVATION(keyboard_velocity_commands)
 {
@@ -35,9 +35,8 @@ REGISTER_OBSERVATION(keyboard_velocity_commands)
 State_RLBase::State_RLBase(int state_mode, std::string state_string)
 : FSMState(state_mode, state_string) 
 {
-    spdlog::info("Initializing State_{}...", state_string);
     auto cfg = param::config["FSM"][state_string];
-    auto policy_dir = parser_policy_dir(cfg["policy_dir"].as<std::string>());
+    auto policy_dir = param::parser_policy_dir(cfg["policy_dir"].as<std::string>());
 
     env = std::make_unique<isaaclab::ManagerBasedRLEnv>(
         YAML::LoadFile(policy_dir / "params" / "deploy.yaml"),
@@ -48,7 +47,7 @@ State_RLBase::State_RLBase(int state_mode, std::string state_string)
     this->registered_checks.emplace_back(
         std::make_pair(
             [&]()->bool{ return isaaclab::mdp::bad_orientation(env.get(), 1.0); },
-            (int)FSMMode::Passive
+            FSMStringMap.right.at("Passive")
         )
     );
 }

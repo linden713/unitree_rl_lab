@@ -1,5 +1,15 @@
 FSM:
+  _: # enabled fsms
+    Passive:
+      id: 1
+    FixStand:
+      id: 2
+    Velocity:
+      id: 3
+      type: RLBase
   Passive:
+    transitions: 
+      FixStand: LT + up.on_pressed
     mode: [ # motor mode
       10,10,10,10,10,10,
       10,10,10,10,
@@ -16,6 +26,9 @@ FSM:
       2,2,2,2, 
     ]
   FixStand:
+    transitions: 
+      Passive: LT + B.on_pressed
+      Velocity: RB + X.on_pressed
     kp: [
       200, 200, 300, 200, 200, 300,
       200, 200, 200, 
@@ -44,4 +57,6 @@ FSM:
       ]
     ]
   Velocity:
+    transitions: 
+      Passive: LT + B.on_pressed
     policy_dir: ../../../logs/rsl_rl/unitree_h1_velocity
